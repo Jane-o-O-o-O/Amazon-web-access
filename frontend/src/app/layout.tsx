@@ -21,6 +21,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="font-semibold text-gray-900 text-lg">CrossBorder AI Copilot</span>
               <a href="/" className="text-sm text-gray-500 hover:text-gray-900">Analyze</a>
               <a href="/batch" className="text-sm text-gray-500 hover:text-gray-900">Batch</a>
+              <div className="flex-1" />
+              <a href="/settings" className="text-sm text-gray-500 hover:text-gray-900">⚙ Settings</a>
             </nav>
             <main className="max-w-7xl mx-auto px-4 py-8">{children}</main>
           </div>

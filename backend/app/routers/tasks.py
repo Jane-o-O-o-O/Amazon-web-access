@@ -21,16 +21,24 @@ class CostParams(BaseModel):
     exchangeRate: float = 7.2
 
 
+class ModelOverride(BaseModel):
+    """Optional per-request model configuration. Overrides global settings."""
+    provider: str | None = None    # "anthropic" | "openai"
+    baseUrl: str | None = None     # e.g. "https://api.deepseek.com/v1"
+    apiKey: str | None = None      # if empty, uses global setting
+    modelName: str | None = None   # e.g. "deepseek-chat"
+
+
 class CreateTaskRequest(BaseModel):
     sourceUrl: str
     targetMarketplace: str = "amazon-us"
     cost: CostParams = CostParams()
+    modelOverride: ModelOverride | None = None  # optional per-task model
 
 
 @router.post("/product-analysis")
 async def create_product_analysis_task(body: CreateTaskRequest):
     task_id = f"task_{uuid.uuid4().hex[:12]}"
-    # Store initial state in Redis
     r.set(f"task:{task_id}:status", "queued", ex=86400)
     r.set(
         f"task:{task_id}:progress",
@@ -39,9 +47,19 @@ async def create_product_analysis_task(body: CreateTaskRequest):
     )
     r.set(f"task:{task_id}:source_url", body.sourceUrl, ex=86400)
 
-    # Dispatch to Celery
+    # Resolve model settings: per-request override > Redis stored settings > env defaults
+    from app.routers.settings import get_model_settings
+    ms = get_model_settings()
+    ov = body.modelOverride or ModelOverride()
+
     run_product_analysis.apply_async(
         args=[task_id, body.sourceUrl, body.cost.model_dump(), body.targetMarketplace],
+        kwargs={
+            "provider":  ov.provider  or ms.provider,
+            "api_key":   ov.apiKey    or ms.api_key,
+            "base_url":  ov.baseUrl   or ms.base_url,
+            "model":     ov.modelName or ms.model_name,
+        },
         task_id=task_id,
     )
     return {"taskId": task_id, "status": "queued"}
