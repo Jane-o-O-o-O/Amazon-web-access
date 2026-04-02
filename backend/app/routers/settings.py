@@ -87,7 +87,36 @@ async def list_providers():
 @router.get("/cdp-status")
 async def cdp_status():
     """Check if the web-access CDP proxy is running."""
-    from app.services.crawler import CDPCrawler
-    crawler = CDPCrawler()
-    available = await crawler.is_available()
-    return {"available": available, "proxy_url": settings.CDP_PROXY_URL}
+    from app.web_access.cdp_client import CDPClient
+    client = CDPClient()
+    available = await client.health()
+    tabs = []
+    if available:
+        try:
+            tabs_info = await client.targets()
+            tabs = [{"id": t.id, "url": t.url, "title": t.title} for t in tabs_info]
+        except Exception:
+            pass
+    return {
+        "available": available,
+        "proxy_url": settings.CDP_PROXY_URL,
+        "open_tabs": tabs,
+    }
+
+
+@router.get("/site-experience")
+async def list_site_experience():
+    """List all accumulated site crawling experience."""
+    from app.web_access.site_experience import list_all_patterns
+    return {"patterns": list_all_patterns()}
+
+
+@router.get("/site-experience/{domain}")
+async def get_site_experience_by_domain(domain: str):
+    """Get crawling experience for a specific domain."""
+    from app.web_access.site_experience import get_site_experience
+    exp = get_site_experience(domain)
+    if not exp:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"No experience recorded for {domain}")
+    return exp
